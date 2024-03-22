@@ -342,3 +342,35 @@ DELETE FROM Production.Product WHERE ProductID = 1001
 GO
 
 -- SCALAR FUNCTION
+-- Cau 1
+CREATE FUNCTION CountOfEmployees(@MaPB smallint)
+RETURNS int
+AS
+BEGIN
+	RETURN (SELECT COUNT(edh.EmployeeID)
+			FROM HumanResources.EmployeeDepartmentHistory edh
+				JOIN HumanResources.Department d ON edh.DepartmentID = d.DepartmentID
+			WHERE d.DepartmentID = @MaPB
+			GROUP BY d.DepartmentID)
+END
+GO
+
+SELECT d.DepartmentID, d.Name, dbo.CountOfEmployees(d.DepartmentID) AS CountOfEmp
+FROM HumanResources.EmployeeDepartmentHistory edh
+	JOIN HumanResources.Department d ON edh.DepartmentID = d.DepartmentID
+GROUP BY d.DepartmentID, d.Name
+GO
+
+-- Cau 2
+CREATE FUNCTION InventoryProd(@ProductID int, @LocationID smallint)
+RETURNS smallint
+AS
+BEGIN
+	RETURN (SELECT Quantity
+			FROM Production.ProductInventory
+			WHERE ProductID = @ProductID AND LocationID = @LocationID)
+END
+GO
+
+SELECT ppi.ProductID, ppi.LocationID, dbo.InventoryProd(ppi.ProductID, ppi.LocationID) AS SLTonKho
+FROM Production.ProductInventory ppi
