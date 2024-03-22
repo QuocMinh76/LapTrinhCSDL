@@ -165,3 +165,180 @@ GROUP BY d.DepartmentID, Name
 HAVING AVG(Rate) > 30
 
 SELECT * FROM List_Department_View
+
+-- Cau 8
+CREATE VIEW Sales.vw_OrderSummary AS
+SELECT YEAR(OrderDate) AS OrderYear, MONTH(OrderDate) AS OrderMonth, SUM(OrderQty * UnitPrice) AS OrderTotal
+FROM Sales.SalesOrderDetail sod JOIN Sales.SalesOrderHeader soh ON sod.SalesOrderID = soh.SalesOrderID
+GROUP BY YEAR(OrderDate), MONTH(OrderDate)
+
+SELECT * FROM Sales.vw_OrderSummary
+
+-- MODULE 4
+
+-- STORED PROCEDURES
+-- Cau 1
+CREATE PROC TinhTotalDue
+@Thang int, @Nam int
+AS
+BEGIN
+	SELECT CustomerID, SUM(TotalDue) AS SumOfTotalDue
+	FROM Sales.SalesOrderHeader
+	WHERE YEAR(OrderDate) = @Nam AND MONTH(OrderDate) = @Thang
+	GROUP BY CustomerID
+END
+
+EXEC TinhTotalDue 12, 2002
+GO
+
+-- Cau 2
+CREATE PROC TinhSalesInYear
+@SalesPerson int, @Nam int
+AS
+BEGIN
+	DECLARE @SalesYTD int
+	SET @SalesYTD = (SELECT SUM(OrderQty * UnitPrice)
+					FROM Sales.SalesPerson sp JOIN Sales.SalesOrderHeader soh ON sp.SalesPersonID = soh.SalesPersonID
+						JOIN Sales.SalesOrderDetail sod ON sod.SalesOrderID = soh.SalesOrderID
+					WHERE sp.SalesPersonID = @SalesPerson AND YEAR(OrderDate) = @Nam)
+	SELECT @SalesYTD AS SaleYearInYear
+END
+
+EXEC TinhSalesInYear 281, 2003
+GO
+
+-- Cau 3
+CREATE PROC DSListPriceKhongQuaMaxPrice
+@MaxPrice int
+AS
+BEGIN
+	SELECT ProductID, ListPrice
+	FROM Production.Product
+	WHERE ListPrice < @MaxPrice
+END
+
+EXEC DSListPriceKhongQuaMaxPrice 52
+GO
+
+-- Cau 4
+CREATE PROC NewBonus
+@SalesPerson int
+AS
+BEGIN
+	DECLARE @NewBonus money
+	SET @NewBonus = (SELECT SUM(SubTotal) * 0.01
+					FROM Sales.SalesPerson sp JOIN Sales.SalesOrderHeader soh ON sp.SalesPersonID = soh.SalesPersonID
+					WHERE sp.SalesPersonID = @SalesPerson)
+	UPDATE Sales.SalesPerson
+	SET Bonus = Bonus + @NewBonus
+	WHERE SalesPersonID = @SalesPerson			
+END
+
+EXEC NewBonus 281
+GO
+
+-- Cau 5
+CREATE PROC XemThongTinNhomSP
+@Nam int
+AS
+BEGIN
+	SELECT pc.ProductCategoryID, pc.Name, SUM(OrderQty) AS SumOfOty
+	FROM Sales.SalesOrderDetail sod JOIN Production.Product p ON sod.ProductID = p.ProductID
+		JOIN Production.ProductSubcategory ps ON p.ProductSubcategoryID = ps.ProductSubcategoryID
+		JOIN Production.ProductCategory pc ON ps.ProductCategoryID = pc.ProductCategoryID
+		JOIN Sales.SalesOrderHeader soh ON sod.SalesOrderID = soh.SalesOrderID
+	WHERE YEAR(OrderDate) = @Nam
+		AND pc.ProductCategoryID = (SELECT TOP 1 pc.ProductCategoryID
+					FROM Sales.SalesOrderDetail sod JOIN Production.Product p ON sod.ProductID = p.ProductID
+						JOIN Production.ProductSubcategory ps ON p.ProductSubcategoryID = ps.ProductSubcategoryID
+						JOIN Production.ProductCategory pc ON ps.ProductCategoryID = pc.ProductCategoryID
+						JOIN Sales.SalesOrderHeader soh ON sod.SalesOrderID = soh.SalesOrderID
+					WHERE YEAR(OrderDate) = @Nam
+					GROUP BY pc.ProductCategoryID
+					ORDER BY SUM(OrderQty) DESC)
+	GROUP BY pc.ProductCategoryID, pc.Name
+END
+
+EXEC XemThongTinNhomSP 2002
+GO
+
+-- Cau 6
+CREATE PROC TongThu
+@MaNV int
+AS
+BEGIN
+	DECLARE @TongThu money, @ErrCode int, @ThanhCong bit = 0
+	SET @TongThu = (
+		SELECT SUM(OrderQty * UnitPrice)
+		FROM Sales.SalesPerson sp JOIN Sales.SalesOrderHeader soh ON sp.SalesPersonID = soh.SalesPersonID
+		JOIN Sales.SalesOrderDetail sod ON sod.SalesOrderID = soh.SalesOrderID
+		WHERE sp.SalesPersonID = @MaNV
+		GROUP BY sp.SalesPersonID)
+
+	SET @ThanhCong = 1
+	IF (@ThanhCong = 1)
+		SELECT @TongThu
+	ELSE
+		PRINT('Fail')
+END
+
+EXEC TongThu 281
+GO
+-- Cau 6
+create procedure TongThu
+			@id int,
+			@total money output --khai báo tham số output
+as
+	select @total=sum(TotalDue) from Sales.SalesOrderHeader sales
+	where sales.SalesPersonID=@id
+	if @total is null
+		return 0 --- return 0 nếu không thực hiện thành công ( total = null)
+
+---test procedure
+declare @tong money;
+exec dbo.TongThu @id=277, @total=@tong output
+select @tong
+go
+
+
+-- Cau 7
+CREATE PROC XemCuaHangMuaNhieuNhat
+@Nam int
+AS
+BEGIN
+	SELECT s.Name, SUM(OrderQty * UnitPrice) AS TongTien
+	FROM Sales.Store s JOIN Sales.SalesOrderHeader soh ON s.CustomerID = soh.CustomerID
+		JOIN Sales.SalesOrderDetail sod ON sod.SalesOrderID = soh.SalesOrderID
+	WHERE YEAR(OrderDate) = @Nam
+		AND s.CustomerID = (SELECT TOP 1 s.CustomerID
+					FROM Sales.Store s JOIN Sales.SalesOrderHeader soh ON s.CustomerID = soh.CustomerID
+						JOIN Sales.SalesOrderDetail sod ON sod.SalesOrderID = soh.SalesOrderID
+					WHERE YEAR(OrderDate) = @Nam
+					GROUP BY s.CustomerID
+					ORDER BY SUM(OrderQty * UnitPrice) DESC)
+	GROUP BY s.Name
+END
+
+EXEC XemCuaHangMuaNhieuNhat 2001
+GO
+
+-- Cau 8
+CREATE PROC Sp_InsertProduct -- ma tu tang
+@Name nvarchar(50), @PN nvarchar(25), @MF bit, @FGF bit, @SSL smallint,
+	@RP smallint, @SC smallint, @LP smallint, @DTM int, @PSC int, @SSD datetime --, @ProductID
+AS
+BEGIN
+	-- Neu muon them ma bi IDENTITY_INSERT chan thi co the mo cai nay on, them xong thi off (Khong khuyen khich lam cach nay)
+	--SET IDENTITY_INSERT Production.Product ON
+	INSERT INTO Production.Product(Name, ProductNumber, MakeFlag, FinishedGoodsFlag, SafetyStockLevel,
+			ReorderPoint, StandardCost, ListPrice, DaysToManufacture, ProductSubcategoryID, SellStartDate) --, ProductID)
+	VALUES (@Name, @PN, @MF, @FGF, @SSL, @RP, @SC, @LP, @DTM, @PSC, @SSD) --, @ProductID)
+	--SET IDENTITY_INSERT Production.Product OFF
+END
+
+EXEC Sp_InsertProduct 'abc', 'ahihi', 0, 0, 1000, 750, 0.00, 0.00, 1, 2, '2024-03-22 00:00:00.000'
+
+DELETE FROM Production.Product WHERE ProductID = 1001
+GO
+
+-- SCALAR FUNCTION
