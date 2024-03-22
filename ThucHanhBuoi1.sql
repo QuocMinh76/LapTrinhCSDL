@@ -374,3 +374,24 @@ GO
 
 SELECT ppi.ProductID, ppi.LocationID, dbo.InventoryProd(ppi.ProductID, ppi.LocationID) AS SLTonKho
 FROM Production.ProductInventory ppi
+GO
+
+-- Cau 3
+ALTER FUNCTION SubTotalOfEmp(@EmplID int, @MonthOrder int, @YearOrder int)
+RETURNS money
+AS
+BEGIN
+	RETURN (SELECT SUM(SubTotal)
+			FROM Sales.SalesOrderHeader
+			WHERE SalesPersonID = @EmplID 
+				AND YEAR(OrderDate) = @YearOrder
+				AND MONTH(OrderDate) = @MonthOrder
+			GROUP BY SalesPersonID)
+END
+GO
+
+SELECT soh.SalesPersonID, MONTH(soh.OrderDate), YEAR(soh.OrderDate), dbo.SubTotalOfEmp(soh.SalesPersonID, MONTH(soh.OrderDate), YEAR(soh.OrderDate)) AS TongDoanhThu
+FROM Sales.SalesOrderHeader soh
+GROUP BY soh.SalesPersonID, MONTH(soh.OrderDate), YEAR(soh.OrderDate)
+ORDER BY MONTH(soh.OrderDate), YEAR(soh.OrderDate)
+GO
